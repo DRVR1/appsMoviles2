@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.content.ContentValues
 import com.example.tp2.models.Ciudad
+import com.example.tp2.models.Pais
 
 private const val DATABASE_NAME = "GeoBase.db"
 private const val DATABASE_VERSION = 2
@@ -12,7 +13,6 @@ private const val DATABASE_VERSION = 2
 class GeoSQLiteHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
     override fun onCreate(db: SQLiteDatabase) {
-        // Crear tabla paises
         val createCountriesTable = """
             CREATE TABLE paises (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,12 +20,11 @@ class GeoSQLiteHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAM
             );
         """.trimIndent()
 
-        // Crear tabla ciudades (con referencia a pais_id)
         val createCitiesTable = """
             CREATE TABLE ciudades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
-                es_capital INTEGER NOT NULL, -- 0 = false, 1 = true
+                es_capital INTEGER NOT NULL,
                 poblacion INTEGER NOT NULL,
                 pais_id INTEGER NOT NULL,
                 FOREIGN KEY (pais_id) REFERENCES paises(id)
@@ -42,8 +41,9 @@ class GeoSQLiteHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAM
         onCreate(db)
     }
 
-    // Insertar país (solo una vez)
-    fun insertarPais(nombre: String): Long {
+    // ----------- PAIS ------------
+
+    fun createCountry(nombre: String): Long {
         val db = writableDatabase
         val values = ContentValues().apply {
             put("nombre", nombre)
@@ -51,9 +51,70 @@ class GeoSQLiteHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAM
         return db.insert("paises", null, values)
     }
 
+    fun readAllCountries(): List<Pais> {
+        val db = readableDatabase
+        val result = mutableListOf<Pais>()
+        val cursor = db.rawQuery("SELECT id, nombre FROM paises", null)
+        with(cursor) {
+            while (moveToNext()) {
+                val id = getLong(getColumnIndexOrThrow("id"))
+                val nombre = getString(getColumnIndexOrThrow("nombre"))
+                result.add(Pais(id, nombre))
+            }
+        }
+        cursor.close()
+        return result
+    }
 
-    // Insertar ciudad asociada a un país
-    fun insertarCiudad(nombre: String, esCapital: Boolean, poblacion : Int, paisId: Long): Long {
+    fun readCountriesByName(partialName: String): List<Pais> {
+        val db = readableDatabase
+        val result = mutableListOf<Pais>()
+        val query = """
+            SELECT id, nombre
+            FROM paises
+            WHERE nombre LIKE ? COLLATE NOCASE;
+        """.trimIndent()
+
+        val cursor = db.rawQuery(query, arrayOf("%$partialName%"))
+        with(cursor) {
+            while (moveToNext()) {
+                val id = getLong(getColumnIndexOrThrow("id"))
+                val nombre = getString(getColumnIndexOrThrow("nombre"))
+                result.add(Pais(id, nombre))
+            }
+        }
+        cursor.close()
+        return result
+    }
+
+    fun readCountryById(id: Long): Pais? {
+        val db = readableDatabase
+        var country: Pais? = null
+        val query = """
+            SELECT id, nombre
+            FROM paises
+            WHERE id = ?;
+        """.trimIndent()
+
+        val cursor = db.rawQuery(query, arrayOf(id.toString()))
+        with(cursor) {
+            if (moveToFirst()) {
+                val nombre = getString(getColumnIndexOrThrow("nombre"))
+                country = Pais(id, nombre)
+            }
+        }
+        cursor.close()
+        return country
+    }
+
+    fun deleteCountryById(id: Long): Int {
+        val db = writableDatabase
+        return db.delete("paises", "id = ?", arrayOf(id.toString()))
+    }
+
+    // ----------- CIUDAD ------------
+
+    fun createCity(nombre: String, esCapital: Boolean, poblacion: Int, paisId: Long): Long {
         val db = writableDatabase
         val values = ContentValues().apply {
             put("nombre", nombre)
@@ -64,17 +125,16 @@ class GeoSQLiteHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAM
         return db.insert("ciudades", null, values)
     }
 
-    // Devuelve una lista de ciudades buscando por nombre
-    fun buscarCiudadesPorNombre(nombreParcial: String): List<Ciudad> {
+    fun readCitiesByName(partialName: String): List<Ciudad> {
         val db = readableDatabase
-        val resultado = mutableListOf<Ciudad>()
+        val result = mutableListOf<Ciudad>()
         val query = """
-        SELECT id, nombre, es_capital, poblacion, pais_id
-        FROM ciudades
-        WHERE nombre LIKE ? COLLATE NOCASE;
-    """.trimIndent()
+            SELECT id, nombre, es_capital, poblacion, pais_id
+            FROM ciudades
+            WHERE nombre LIKE ? COLLATE NOCASE;
+        """.trimIndent()
 
-        val cursor = db.rawQuery(query, arrayOf("%$nombreParcial%"))
+        val cursor = db.rawQuery(query, arrayOf("%$partialName%"))
         with(cursor) {
             while (moveToNext()) {
                 val id = getLong(getColumnIndexOrThrow("id"))
@@ -82,27 +142,49 @@ class GeoSQLiteHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAM
                 val esCapital = getInt(getColumnIndexOrThrow("es_capital")) == 1
                 val poblacion = getInt(getColumnIndexOrThrow("poblacion"))
                 val paisId = getLong(getColumnIndexOrThrow("pais_id"))
-                resultado.add(Ciudad(id, nombre, esCapital, poblacion, paisId))
+                result.add(Ciudad(id, nombre, esCapital, poblacion, paisId))
             }
         }
         cursor.close()
-        return resultado
+        return result
     }
 
-    // Buscar una ciudad por su ID
-    fun buscarCiudadPorId(ciudadId: Long): Ciudad? {
+    fun readCitiesByCountryId(paisId: Long): List<Ciudad> {
+        val db = readableDatabase
+        val result = mutableListOf<Ciudad>()
+        val query = """
+            SELECT id, nombre, es_capital, poblacion, pais_id
+            FROM ciudades
+            WHERE pais_id = ?;
+        """.trimIndent()
+
+        val cursor = db.rawQuery(query, arrayOf(paisId.toString()))
+        with(cursor) {
+            while (moveToNext()) {
+                val id = getLong(getColumnIndexOrThrow("id"))
+                val nombre = getString(getColumnIndexOrThrow("nombre"))
+                val esCapital = getInt(getColumnIndexOrThrow("es_capital")) == 1
+                val poblacion = getInt(getColumnIndexOrThrow("poblacion"))
+                val paisIdResult = getLong(getColumnIndexOrThrow("pais_id"))
+                result.add(Ciudad(id, nombre, esCapital, poblacion, paisIdResult))
+            }
+        }
+        cursor.close()
+        return result
+    }
+
+    fun readCityById(id: Long): Ciudad? {
         val db = readableDatabase
         var ciudad: Ciudad? = null
         val query = """
-        SELECT id, nombre, es_capital, poblacion, pais_id
-        FROM ciudades
-        WHERE id = ?;
-    """.trimIndent()
+            SELECT id, nombre, es_capital, poblacion, pais_id
+            FROM ciudades
+            WHERE id = ?;
+        """.trimIndent()
 
-        val cursor = db.rawQuery(query, arrayOf(ciudadId.toString()))
+        val cursor = db.rawQuery(query, arrayOf(id.toString()))
         with(cursor) {
             if (moveToFirst()) {
-                val id = getLong(getColumnIndexOrThrow("id"))
                 val nombre = getString(getColumnIndexOrThrow("nombre"))
                 val esCapital = getInt(getColumnIndexOrThrow("es_capital")) == 1
                 val poblacion = getInt(getColumnIndexOrThrow("poblacion"))
@@ -114,67 +196,16 @@ class GeoSQLiteHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAM
         return ciudad
     }
 
-
-    fun modificarPoblacionCiudad(ciudadId: Long, nuevaPoblacion: Int): Int {
+    fun updateCityPopulation(id: Long, nuevaPoblacion: Int): Int {
         val db = writableDatabase
         val values = ContentValues().apply {
             put("poblacion", nuevaPoblacion)
         }
-        // El método update devuelve el número de filas afectadas
-        return db.update(
-            "ciudades",
-            values,
-            "id = ?",
-            arrayOf(ciudadId.toString())
-        )
+        return db.update("ciudades", values, "id = ?", arrayOf(id.toString()))
     }
 
-    fun eliminarCiudadPorId(ciudadId: Long): Int {
+    fun deleteCityById(id: Long): Int {
         val db = writableDatabase
-        // El método delete devuelve el número de filas eliminadas
-        return db.delete(
-            "ciudades",
-            "id = ?",
-            arrayOf(ciudadId.toString())
-        )
-    }
-
-
-    // Obtener todas las ciudades de un país
-    fun obtenerCiudadesDePais(paisId: Long): List<String> {
-        val db = readableDatabase
-        val resultado = mutableListOf<String>()
-        val query = """
-            SELECT c.nombre AS ciudad, c.es_capital
-            FROM ciudades c
-            WHERE c.pais_id = ?;
-        """.trimIndent()
-
-        val cursor = db.rawQuery(query, arrayOf(paisId.toString()))
-        with(cursor) {
-            while (moveToNext()) {
-                val ciudad = getString(getColumnIndexOrThrow("ciudad"))
-                val esCapital = getInt(getColumnIndexOrThrow("es_capital")) == 1
-                resultado.add("Ciudad: $ciudad, ¿Es capital?: $esCapital")
-            }
-        }
-        cursor.close()
-        return resultado
-    }
-
-    // Obtener todos los países
-    fun obtenerTodosLosPaises(): List<Pair<Long, String>> {
-        val db = readableDatabase
-        val resultado = mutableListOf<Pair<Long, String>>()
-        val cursor = db.rawQuery("SELECT id, nombre FROM paises", null)
-        with(cursor) {
-            while (moveToNext()) {
-                val id = getLong(getColumnIndexOrThrow("id"))
-                val nombre = getString(getColumnIndexOrThrow("nombre"))
-                resultado.add(Pair(id, nombre))
-            }
-        }
-        cursor.close()
-        return resultado
+        return db.delete("ciudades", "id = ?", arrayOf(id.toString()))
     }
 }
