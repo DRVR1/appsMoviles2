@@ -208,4 +208,105 @@ class GeoSQLiteHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAM
         val db = writableDatabase
         return db.delete("ciudades", "id = ?", arrayOf(id.toString()))
     }
+
+
+    fun readCapitalCities(): List<Ciudad> {
+        val db = readableDatabase
+        val result = mutableListOf<Ciudad>()
+        val query = """
+        SELECT id, nombre, es_capital, poblacion, pais_id
+        FROM ciudades
+        WHERE es_capital = 1;
+    """.trimIndent()
+
+        val cursor = db.rawQuery(query, null)
+        with(cursor) {
+            while (moveToNext()) {
+                val id = getLong(getColumnIndexOrThrow("id"))
+                val nombre = getString(getColumnIndexOrThrow("nombre"))
+                val esCapital = getInt(getColumnIndexOrThrow("es_capital")) == 1
+                val poblacion = getInt(getColumnIndexOrThrow("poblacion"))
+                val paisId = getLong(getColumnIndexOrThrow("pais_id"))
+                result.add(Ciudad(id, nombre, esCapital, poblacion, paisId))
+            }
+        }
+        cursor.close()
+        return result
+    }
+
+    fun searchCapitalCitiesByName(name: String): List<Ciudad> {
+        val db = readableDatabase
+        val result = mutableListOf<Ciudad>()
+        val query = """
+        SELECT id, nombre, es_capital, poblacion, pais_id
+        FROM ciudades
+        WHERE es_capital = 1 AND nombre LIKE ? COLLATE NOCASE;
+    """.trimIndent()
+
+        val cursor = db.rawQuery(query, arrayOf("%$name%"))
+        with(cursor) {
+            while (moveToNext()) {
+                val id = getLong(getColumnIndexOrThrow("id"))
+                val nombre = getString(getColumnIndexOrThrow("nombre"))
+                val esCapital = getInt(getColumnIndexOrThrow("es_capital")) == 1
+                val poblacion = getInt(getColumnIndexOrThrow("poblacion"))
+                val paisId = getLong(getColumnIndexOrThrow("pais_id"))
+                result.add(Ciudad(id, nombre, esCapital, poblacion, paisId))
+            }
+        }
+        cursor.close()
+        return result
+    }
+
+
+    fun readAllCities(): List<Ciudad> {
+        val db = readableDatabase
+        val result = mutableListOf<Ciudad>()
+        val query = """
+        SELECT id, nombre, es_capital, poblacion, pais_id
+        FROM ciudades;
+    """.trimIndent()
+
+        val cursor = db.rawQuery(query, null)
+        with(cursor) {
+            while (moveToNext()) {
+                val id = getLong(getColumnIndexOrThrow("id"))
+                val nombre = getString(getColumnIndexOrThrow("nombre"))
+                val esCapital = getInt(getColumnIndexOrThrow("es_capital")) == 1
+                val poblacion = getInt(getColumnIndexOrThrow("poblacion"))
+                val paisId = getLong(getColumnIndexOrThrow("pais_id"))
+                result.add(Ciudad(id, nombre, esCapital, poblacion, paisId))
+            }
+        }
+        cursor.close()
+        return result
+    }
+
+    fun searchCitiesByName(name: String): List<Ciudad> {
+        val db = readableDatabase
+        val result = mutableListOf<Ciudad>()
+        val query = """
+        SELECT id, nombre, es_capital, poblacion, pais_id
+        FROM ciudades
+        WHERE nombre LIKE ? COLLATE NOCASE;
+    """.trimIndent()
+
+        val cursor = db.rawQuery(query, arrayOf("%$name%"))
+        with(cursor) {
+            while (moveToNext()) {
+                val id = getLong(getColumnIndexOrThrow("id"))
+                val nombre = getString(getColumnIndexOrThrow("nombre"))
+                val esCapital = getInt(getColumnIndexOrThrow("es_capital")) == 1
+                val poblacion = getInt(getColumnIndexOrThrow("poblacion"))
+                val paisId = getLong(getColumnIndexOrThrow("pais_id"))
+                result.add(Ciudad(id, nombre, esCapital, poblacion, paisId))
+            }
+        }
+        cursor.close()
+        return result
+    }
+    fun deleteCitiesByCountryId(paisId: Long): Int {
+        val db = writableDatabase
+        return db.delete("ciudades", "pais_id = ?", arrayOf(paisId.toString()))
+    }
 }
